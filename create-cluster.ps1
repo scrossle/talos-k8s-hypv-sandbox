@@ -23,10 +23,13 @@ $MemoryBytes  = 4GB
 $DiskSizeBytes = 20GB
 
 $IsoDir       = Join-Path $PSScriptRoot 'iso'
-$IsoPath      = Join-Path $IsoDir 'metal-amd64.iso'
 $OutDir       = Join-Path $PSScriptRoot '_out'
 
-$IsoUrl       = "https://github.com/siderolabs/talos/releases/download/$TalosVersion/metal-amd64.iso"
+# Detect host architecture for correct ISO
+$Arch = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'arm64' } else { 'amd64' }
+$IsoFilename  = "metal-$Arch.iso"
+$IsoPath      = Join-Path $IsoDir $IsoFilename
+$IsoUrl       = "https://github.com/siderolabs/talos/releases/download/$TalosVersion/$IsoFilename"
 
 $IpTimeout    = 180   # seconds to wait for VMs to get an IP
 $BootTimeout  = 300   # seconds to wait for nodes after config apply
