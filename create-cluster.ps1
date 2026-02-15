@@ -26,7 +26,11 @@ $IsoDir       = Join-Path $PSScriptRoot 'iso'
 $OutDir       = Join-Path $PSScriptRoot '_out'
 
 # Detect host architecture for correct ISO
-$Arch = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'arm64' } else { 'amd64' }
+# Note: [RuntimeInformation]::OSArchitecture and $env:PROCESSOR_ARCHITECTURE both
+# report X64/AMD64 when running under x86 emulation on ARM64 Windows. The WMI
+# OSArchitecture string is the only reliable source on Windows-on-ARM.
+$OsArch = (Get-CimInstance Win32_OperatingSystem).OSArchitecture
+$Arch = if ($OsArch -match 'ARM') { 'arm64' } else { 'amd64' }
 $IsoFilename  = "metal-$Arch.iso"
 $IsoPath      = Join-Path $IsoDir $IsoFilename
 $IsoUrl       = "https://github.com/siderolabs/talos/releases/download/$TalosVersion/$IsoFilename"
