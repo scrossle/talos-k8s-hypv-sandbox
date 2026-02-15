@@ -91,7 +91,12 @@ if (-not $vm) {
     # Find the VM with this IP by checking ARP table
     $allVms = Get-VM -Name 'talos-hypv-*' -ErrorAction SilentlyContinue
     foreach ($candidateVm in $allVms) {
-        $rawMac = (Get-VMNetworkAdapter -VMName $candidateVm.Name).MacAddress
+        $adapter = Get-VMNetworkAdapter -VMName $candidateVm.Name -ErrorAction SilentlyContinue
+        if (-not $adapter -or -not $adapter.MacAddress -or $adapter.MacAddress -eq '000000000000') {
+            continue  # Skip VMs without valid MAC addresses
+        }
+
+        $rawMac = $adapter.MacAddress
         $mac = ($rawMac -replace '(.{2})', '$1-').TrimEnd('-')
         $neighbour = Get-NetNeighbor -LinkLayerAddress $mac -ErrorAction SilentlyContinue |
                      Where-Object { $_.AddressFamily -eq 'IPv4' -and $_.IPAddress -eq $nodeIp }
@@ -110,12 +115,22 @@ if (-not $vm) {
 
     # Get the corresponding Kubernetes node name
     $vmIp = $null
-    $rawMac = (Get-VMNetworkAdapter -VMName $vm.Name).MacAddress
-    $mac = ($rawMac -replace '(.{2})', '$1-').TrimEnd('-')
-    $neighbour = Get-NetNeighbor -LinkLayerAddress $mac -ErrorAction SilentlyContinue |
-                 Where-Object { $_.AddressFamily -eq 'IPv4' -and $_.IPAddress -notlike '169.254.*' }
-    if ($neighbour) {
-        $vmIp = $neighbour.IPAddress
+    $adapter = Get-VMNetworkAdapter -VMName $vm.Name -ErrorAction SilentlyContinue
+    if ($adapter -and $adapter.MacAddress -and $adapter.MacAddress -ne '000000000000') {
+        $rawMac = $adapter.MacAddress
+        $mac = ($rawMac -replace '(.{2})', '$1-').TrimEnd('-')
+        $neighbour = Get-NetNeighbor -LinkLayerAddress $mac -ErrorAction SilentlyContinue |
+                     Where-Object {
+                         $_.AddressFamily -eq 'IPv4' -and
+                         $_.IPAddress -like '172.*' -and
+                         $_.IPAddress -notlike '169.254.*' -and
+                         $_.IPAddress -notmatch '\.\d+\.1$'  # Exclude gateway IPs
+                     } |
+                     Select-Object -First 1
+
+        if ($neighbour) {
+            $vmIp = $neighbour.IPAddress
+        }
     }
 
     if ($vmIp) {
