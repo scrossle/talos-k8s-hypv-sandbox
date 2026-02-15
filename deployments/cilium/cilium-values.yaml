@@ -1,0 +1,47 @@
+## Cilium Helm values for Talos Linux (without kube-proxy)
+## Reference: https://docs.siderolabs.com/kubernetes-guides/cni/deploying-cilium
+
+# Use Kubernetes IPAM (Talos best practice)
+ipam:
+  mode: kubernetes
+
+# Replace kube-proxy with Cilium's eBPF datapath
+kubeProxyReplacement: true
+
+# Point to KubePrism (Talos local API proxy on every node)
+k8sServiceHost: localhost
+k8sServicePort: 7445
+
+# Talos mounts cgroupv2 and bpffs already — don't let Cilium try
+cgroup:
+  autoMount:
+    enabled: false
+  hostRoot: /sys/fs/cgroup
+
+# Talos doesn't allow loading kernel modules from pods — drop SYS_MODULE
+securityContext:
+  capabilities:
+    ciliumAgent:
+      - CHOWN
+      - KILL
+      - NET_ADMIN
+      - NET_RAW
+      - IPC_LOCK
+      - SYS_ADMIN
+      - SYS_RESOURCE
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    cleanCiliumState:
+      - NET_ADMIN
+      - SYS_ADMIN
+      - SYS_RESOURCE
+
+# Enable Hubble observability + UI
+hubble:
+  enabled: true
+  relay:
+    enabled: true
+  ui:
+    enabled: true

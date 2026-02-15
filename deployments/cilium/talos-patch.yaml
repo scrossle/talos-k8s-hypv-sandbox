@@ -1,0 +1,8 @@
+## Machine config patch: disable default Flannel CNI and kube-proxy
+## Apply to ALL nodes (control plane + workers) before installing Cilium.
+cluster:
+  network:
+    cni:
+      name: none
+  proxy:
+    disabled: true
