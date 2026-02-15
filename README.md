@@ -82,6 +82,8 @@ After running the ingress deploy script (which updates your hosts file):
 | `http://hubble.talos.local` | Hubble UI | — |
 | `http://traefik.talos.local/dashboard/` | Traefik | — |
 
+> **Grafana login:** The default username and password are both `admin`. You'll be prompted to change the password on first login — you can skip this for a sandbox.
+
 ## Tear Down
 
 ```powershell
