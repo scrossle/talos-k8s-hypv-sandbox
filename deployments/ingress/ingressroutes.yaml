@@ -45,3 +45,18 @@ spec:
       services:
         - name: hubble-ui
           port: 80
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: traefik-dashboard-ext
+  namespace: traefik
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`traefik.talos.local`)
+      kind: Rule
+      services:
+        - kind: TraefikService
+          name: api@internal
