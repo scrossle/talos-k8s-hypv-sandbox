@@ -1,0 +1,17 @@
+## MetalLB L2 advertisement + IP pool
+## The pool range is set dynamically by deploy.ps1 based on the current subnet.
+---
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: default
+  namespace: metallb-system
+---
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: default-pool
+  namespace: metallb-system
+spec:
+  addresses:
+    - PLACEHOLDER_RANGE
