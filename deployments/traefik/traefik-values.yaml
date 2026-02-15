@@ -1,0 +1,34 @@
+## Traefik Helm values — NodePort ingress for the sandbox cluster
+
+service:
+  type: NodePort
+
+ports:
+  web:
+    nodePort: 30080
+  websecure:
+    nodePort: 30443
+
+# Enable the dashboard (access via port-forward)
+ingressRoute:
+  dashboard:
+    enabled: true
+
+# Minimal resources for a 4GB-per-node sandbox
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    memory: 128Mi
+
+# Single replica is fine for a dev sandbox
+deployment:
+  replicas: 1
+
+# Logs
+logs:
+  general:
+    level: INFO
+  access:
+    enabled: true
