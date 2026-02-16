@@ -7,6 +7,7 @@
     3. Switches Traefik from NodePort to LoadBalancer (ports 80/443).
     4. Updates Windows hosts file entries to point to the new LoadBalancer IP.
 #>
+#Requires -RunAsAdministrator
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
@@ -69,7 +70,7 @@ Write-Step 'Configuring MetalLB IP address pool'
 # Wait for MetalLB CRDs to be available
 $elapsed = 0
 while ($elapsed -lt 60) {
-    $crd = kubectl get crd ipaddresspools.metallb.io 2>&1
+    kubectl get crd ipaddresspools.metallb.io 2>&1 | Out-Null
     if ($LASTEXITCODE -eq 0) { break }
     Start-Sleep -Seconds 5
     $elapsed += 5
