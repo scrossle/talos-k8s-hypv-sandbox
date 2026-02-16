@@ -188,7 +188,7 @@ if (-not $Force) {
 if (-not $isControlPlane) {
     Write-Step 'Draining workloads from worker node'
 
-    kubectl drain $k8sNodeName --ignore-daemonsets --delete-emptydir-data --timeout=300s 2>&1
+    kubectl drain $k8sNodeName --ignore-daemonsets --delete-emptydir-data --timeout=300s
     if ($LASTEXITCODE -ne 0) {
         if (-not $Force) {
             throw "Failed to drain $k8sNodeName. Use -Force to skip drain checks."
