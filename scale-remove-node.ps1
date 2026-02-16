@@ -201,6 +201,62 @@ if (-not $isControlPlane) {
     Write-Warn "Control-plane nodes are not drained (workloads should not run here)"
 }
 
+# ── Remove from etcd cluster (if control-plane) ──────────────────────────────
+
+if ($isControlPlane) {
+    Write-Step 'Removing node from etcd cluster'
+
+    # Find remaining control plane nodes (not the one being removed)
+    $allCpNodes = kubectl get nodes -l node-role.kubernetes.io/control-plane -o json 2>&1 | ConvertFrom-Json
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to list control plane nodes"
+    }
+
+    $remainingCpNodes = $allCpNodes.items | Where-Object { $_.metadata.name -ne $k8sNodeName }
+
+    if (-not $remainingCpNodes -or $remainingCpNodes.Count -eq 0) {
+        throw "Cannot remove the last control plane node! This would destroy the cluster."
+    }
+
+    # Get IP of first remaining control plane node
+    $remainingCp = $remainingCpNodes[0]
+    $remainingCpIp = ($remainingCp.status.addresses | Where-Object { $_.type -eq 'InternalIP' }).address
+
+    if (-not $remainingCpIp) {
+        throw "Could not determine IP of remaining control plane node"
+    }
+
+    Write-Ok "Using control plane node $($remainingCp.metadata.name) ($remainingCpIp) for etcd operations"
+
+    # Get etcd member list
+    $etcdOutput = talosctl --talosconfig $talosconfig -n $remainingCpIp etcd members 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warn "Failed to query etcd members. The node may not be in the etcd cluster."
+    } else {
+        # Parse table output to find member ID by hostname
+        # Output format: NODE  ID  HOSTNAME  PEER URLS  CLIENT URLS  LEARNER
+        $memberLine = $etcdOutput | Select-String -Pattern "\s+([0-9a-f]+)\s+$k8sNodeName\s+"
+
+        if ($memberLine) {
+            $memberId = $memberLine.Matches[0].Groups[1].Value
+            Write-Ok "Found etcd member: $memberId ($k8sNodeName)"
+
+            # Remove from etcd
+            talosctl --talosconfig $talosconfig -n $remainingCpIp etcd remove-member $memberId 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                if (-not $Force) {
+                    throw "Failed to remove etcd member. Use -Force to continue anyway."
+                }
+                Write-Warn "Failed to remove etcd member, continuing anyway (Force mode)"
+            } else {
+                Write-Ok "etcd member removed successfully"
+            }
+        } else {
+            Write-Warn "Node not found in etcd member list (may have already been removed)"
+        }
+    }
+}
+
 # ── Delete node from Kubernetes ──────────────────────────────────────────────
 
 Write-Step 'Deleting node from Kubernetes'
