@@ -248,6 +248,16 @@ Stop-VM -Name $nodeName -TurnOff -Force
 Start-VM -Name $nodeName
 Write-Ok "$nodeName restarted (booting from disk)"
 
+# ── Re-detect IP after reboot ────────────────────────────────────────────────
+
+Write-Step "Re-detecting IP after reboot"
+
+# IMPORTANT: After reboot, VM may get new IP from DHCP (Hyper-V Default Switch)
+# Re-detect IP to ensure we're using the current address
+Write-Host "   Waiting for $nodeName IP " -NoNewline
+$nodeIp = Wait-ForVmIp -VMName $nodeName -TimeoutSeconds $IpTimeout
+Write-Ok "`n   $nodeName -> $nodeIp"
+
 # ── Wait for node to come up ─────────────────────────────────────────────────
 
 Write-Step "Waiting for $nodeName to boot from disk ($BootTimeout`s timeout)"
