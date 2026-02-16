@@ -1,4 +1,4 @@
-#Requires -RunAsAdministrator
+##Requires -RunAsAdministrator
 <#
 .SYNOPSIS
     Tears down the Talos Linux Hyper-V cluster created by create-cluster.ps1.
