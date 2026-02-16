@@ -288,6 +288,28 @@ $env:KUBECONFIG = $kubeconfigPath
 $nodeCount = (kubectl get nodes -o json | ConvertFrom-Json).items.Count
 Write-Ok "Cluster now has $nodeCount nodes. Node is joining..."
 
+# ── Verify etcd membership (control-plane only) ──────────────────────────────
+
+if ($NodeType -eq 'controlplane') {
+    Write-Step 'Verifying etcd membership'
+
+    Start-Sleep -Seconds 15   # Give etcd time to sync
+
+    # Check if node is in etcd cluster
+    $etcdOutput = talosctl --talosconfig $talosconfig -n $cpEndpoint etcd members 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warn "Could not query etcd members. Check manually with: talosctl -n $cpEndpoint etcd members"
+    } else {
+        # Parse etcd member list to see if new node appears
+        if ($etcdOutput -match $nodeIp) {
+            Write-Ok "Control plane node is an etcd member"
+        } else {
+            Write-Warn "Node not yet in etcd cluster. This may resolve automatically."
+            Write-Warn "Check etcd membership with: talosctl --talosconfig $talosconfig -n $cpEndpoint etcd members"
+        }
+    }
+}
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 
 Write-Host "`n" -NoNewline
