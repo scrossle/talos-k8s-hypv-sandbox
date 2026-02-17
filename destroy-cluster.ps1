@@ -5,7 +5,16 @@
 .DESCRIPTION
     Stops and removes the control-plane and worker VMs, deletes their VHDX
     files, and cleans up the generated config directory (_out/).
+.PARAMETER Force
+    Skip the confirmation prompt before destroying the cluster.
+.EXAMPLE
+    .\destroy-cluster.ps1
+    .\destroy-cluster.ps1 -Force
 #>
+[CmdletBinding()]
+param(
+    [switch]$Force
+)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
@@ -25,6 +34,23 @@ if (-not $VmNames) {
 function Write-Step { param([string]$Message) Write-Host "`n>> $Message" -ForegroundColor Cyan }
 function Write-Ok   { param([string]$Message) Write-Host "   $Message" -ForegroundColor Green }
 function Write-Warn { param([string]$Message) Write-Host "   $Message" -ForegroundColor Yellow }
+
+# ── Confirmation prompt ──────────────────────────────────────────────────────
+
+if (-not $Force) {
+    Write-Host "`n" -NoNewline
+    Write-Host "═══════════════════════════════════════════════" -ForegroundColor Red
+    Write-Host " WARNING: About to destroy the entire cluster" -ForegroundColor Red
+    Write-Host "═══════════════════════════════════════════════" -ForegroundColor Red
+    Write-Host "  VMs to be destroyed: $($VmNames -join ', ')"
+    Write-Host "  This will also delete all VHDX files and the _out/ directory."
+    Write-Host ""
+    $confirm = Read-Host "Type 'yes' to proceed with cluster destruction"
+    if ($confirm -ne 'yes') {
+        Write-Host "Aborted." -ForegroundColor Yellow
+        exit 0
+    }
+}
 
 # ── Stop and remove VMs ──────────────────────────────────────────────────────
 

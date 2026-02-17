@@ -33,12 +33,25 @@ $env:KUBECONFIG = $Kubeconfig
 
 Write-Step 'Detecting node subnet for MetalLB IP pool'
 
-# Get the first node's IP and compute a pool at the top of the /20
+# Get the first node's IP and compute a pool at the top of the /20.
+#
+# Hyper-V Default Switch assigns addresses via DHCP within a /20 block.
+# Example: node gets 172.31.8.x => the /20 is 172.31.0.0/20 (covers .0.x through .15.x).
+#
+# To avoid colliding with DHCP-assigned addresses, we place the MetalLB pool
+# at the very top of the /20: the last 11 addresses of the final /24 (.240–.250).
+# Hyper-V DHCP typically stays well below .200, so this range is safe.
+#
+# Bit math: ($octets[2] -band 0xF0) strips the lower 4 bits, giving the /20 base
+# for the third octet. Adding 15 gives the highest /24 in that /20 block.
+# e.g. node=172.31.8.5 => thirdBase=0, poolStart=172.31.15.240, poolEnd=172.31.15.250
+#
+# NOTE: If your Hyper-V subnet differs (rare after host reboots), verify the range
+# doesn't overlap DHCP: Get-NetNeighbor to see which IPs are in use.
 $nodeIp = kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}'
 $octets = $nodeIp -split '\.'
-# For a /20 subnet, the third octet's base is aligned to 16-block boundaries
-$thirdBase = [int]$octets[2] -band 0xF0
-$poolStart = "$($octets[0]).$($octets[1]).$($thirdBase + 15).240"
+$thirdBase = [int]$octets[2] -band 0xF0           # align to /20 boundary (16-block)
+$poolStart = "$($octets[0]).$($octets[1]).$($thirdBase + 15).240"  # top /24 in the /20
 $poolEnd   = "$($octets[0]).$($octets[1]).$($thirdBase + 15).250"
 $poolRange = "$poolStart-$poolEnd"
 

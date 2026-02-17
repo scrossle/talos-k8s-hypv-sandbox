@@ -198,7 +198,11 @@ if (-not $isControlPlane) {
         Write-Ok "$k8sNodeName drained successfully"
     }
 } else {
-    Write-Warn "Control-plane nodes are not drained (workloads should not run here)"
+    # Control-plane nodes have the node-role.kubernetes.io/control-plane:NoSchedule taint,
+    # which prevents user workloads from running there. kubectl drain evicts pods from a
+    # node; since no workloads should be present, drain is unnecessary and would fail
+    # trying to evict DaemonSet pods that can't move. Skip drain for CP nodes.
+    Write-Warn "Skipping drain: control-plane nodes have NoSchedule taint (no user workloads to evict)"
 }
 
 # ── Remove from etcd cluster (if control-plane) ──────────────────────────────
@@ -228,32 +232,55 @@ if ($isControlPlane) {
 
     Write-Ok "Using control plane node $($remainingCp.metadata.name) ($remainingCpIp) for etcd operations"
 
-    # Get etcd member list
-    $etcdOutput = talosctl --talosconfig $talosconfig -n $remainingCpIp etcd members 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        Write-Warn "Failed to query etcd members. The node may not be in the etcd cluster."
-    } else {
-        # Parse table output to find member ID by hostname
-        # Output format: NODE  ID  HOSTNAME  PEER URLS  CLIENT URLS  LEARNER
-        $memberLine = $etcdOutput | Select-String -Pattern "\s+([0-9a-f]+)\s+$k8sNodeName\s+"
+    # Get etcd member list and find member ID for the node being removed.
+    # Strategy: try JSON output first (more robust), fall back to text parsing.
+    $memberId = $null
 
-        if ($memberLine) {
-            $memberId = $memberLine.Matches[0].Groups[1].Value
-            Write-Ok "Found etcd member: $memberId ($k8sNodeName)"
-
-            # Remove from etcd
-            talosctl --talosconfig $talosconfig -n $remainingCpIp etcd remove-member $memberId 2>&1
-            if ($LASTEXITCODE -ne 0) {
-                if (-not $Force) {
-                    throw "Failed to remove etcd member. Use -Force to continue anyway."
-                }
-                Write-Warn "Failed to remove etcd member, continuing anyway (Force mode)"
-            } else {
-                Write-Ok "etcd member removed successfully"
+    # Attempt 1: JSON output — independent of table column widths or format changes
+    $etcdJsonOutput = talosctl --talosconfig $talosconfig -n $remainingCpIp etcd members --output json 2>$null
+    if ($LASTEXITCODE -eq 0) {
+        try {
+            $etcdData = $etcdJsonOutput | ConvertFrom-Json -ErrorAction Stop
+            # talosctl wraps per-node responses: { "messages": [{ "members": [...] }] }
+            $allMembers = @($etcdData.messages | ForEach-Object { $_.members }) |
+                          Where-Object { $_ -ne $null }
+            $target = $allMembers | Where-Object { $_.hostname -eq $k8sNodeName }
+            if ($target) {
+                $memberId = $target.id
+                Write-Ok "Found etcd member (JSON): $memberId ($k8sNodeName)"
             }
-        } else {
-            Write-Warn "Node not found in etcd member list (may have already been removed)"
+        } catch {
+            Write-Warn "JSON parsing failed: $_"
         }
+    }
+
+    # Attempt 2: text table parsing (fallback if JSON flag unsupported or parse failed)
+    # Table format: NODE  ID(hex)  HOSTNAME  PEER URLS  CLIENT URLS  LEARNER
+    if (-not $memberId) {
+        $etcdTextOutput = talosctl --talosconfig $talosconfig -n $remainingCpIp etcd members 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warn "Failed to query etcd members. The node may not be in the etcd cluster."
+        } else {
+            $memberLine = $etcdTextOutput | Select-String -Pattern "\s+([0-9a-f]+)\s+$k8sNodeName\s+"
+            if ($memberLine) {
+                $memberId = $memberLine.Matches[0].Groups[1].Value
+                Write-Ok "Found etcd member (text): $memberId ($k8sNodeName)"
+            }
+        }
+    }
+
+    if ($memberId) {
+        talosctl --talosconfig $talosconfig -n $remainingCpIp etcd remove-member $memberId 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            if (-not $Force) {
+                throw "Failed to remove etcd member. Use -Force to continue anyway."
+            }
+            Write-Warn "Failed to remove etcd member, continuing anyway (Force mode)"
+        } else {
+            Write-Ok "etcd member removed successfully"
+        }
+    } else {
+        Write-Warn "Node '$k8sNodeName' not found in etcd member list (may have already been removed)"
     }
 }
 

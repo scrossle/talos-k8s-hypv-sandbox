@@ -16,10 +16,12 @@ prometheus:
     storageSpec: {}
 
 # Grafana
+# WARNING: Default credentials below are for sandbox use only.
+# Change adminPassword before deploying to any shared or production environment.
 grafana:
   enabled: true
   adminUser: admin
-  adminPassword: admin
+  adminPassword: admin  # CHANGE THIS for non-sandbox deployments
   resources:
     requests:
       cpu: 50m
